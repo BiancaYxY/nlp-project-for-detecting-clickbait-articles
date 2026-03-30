@@ -17,6 +17,8 @@ selenium>=4.18.0
 # ---------------------------
 numpy>=1.26.0
 scikit-learn>=1.4.0
+sentence-transformers>=2.6.0
+scipy>=1.11.0
 
 # Transformers / embeddings / NLI
 torch>=2.2.0
@@ -27,3 +29,4 @@ sentence-transformers>=2.6.0
 # Utilities
 # ---------------------------
 tqdm>=4.66.0
+python-dotenv>=1.0.0
