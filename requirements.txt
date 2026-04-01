@@ -23,7 +23,13 @@ scipy>=1.11.0
 # Transformers / embeddings / NLI
 torch>=2.2.0
 transformers>=4.38.0
-sentence-transformers>=2.6.0
+accelerate>=0.26.0
+
+# ---------------------------
+# API Server
+# ---------------------------
+flask>=3.0.0
+flask-cors>=4.0.0
 
 # ---------------------------
 # Utilities
