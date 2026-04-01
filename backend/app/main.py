@@ -7,6 +7,7 @@ from nlp.semantic_similarity import compute_similarity
 from nlp.entailment import compute_entailment
 from nlp.clickbait import compute_clickbait
 from decision.verdict import compute_verdict
+from llm.explanation_generator import generate_explanation
 
 app = Flask(__name__)
 CORS(app)  # => we can use React bc of this
@@ -36,15 +37,25 @@ def run_pipeline(url: str) -> dict:
     scraping_data = extract_article(url)
 
     cleaned = scraping_data.get("cleaned", {})
-    language = detect_language_from_text(
-        cleaned.get("title", ""),
-        cleaned.get("text", "")
-    )
+    headline = cleaned.get("title", "")
+    article_text = cleaned.get("text", "")
+
+    language = detect_language_from_text(headline, article_text)
 
     similarity_result = compute_similarity(scraping_data, language=language)
     entailment_result = compute_entailment(scraping_data, language=language)
-    clickbait_result  = compute_clickbait(scraping_data,  language=language)
-    verdict_result    = compute_verdict(similarity_result, entailment_result, clickbait_result)
+    clickbait_result = compute_clickbait(scraping_data, language=language)
+    verdict_result = compute_verdict(
+        similarity_result,
+        entailment_result,
+        clickbait_result
+    )
+
+    explanation_result = generate_explanation(
+        headline=headline,
+        verdict_result=verdict_result,
+        language=language
+    )
 
     return {
         "url": url,
@@ -54,6 +65,7 @@ def run_pipeline(url: str) -> dict:
         "entailment": entailment_result,
         "clickbait": clickbait_result,
         "verdict": verdict_result,
+        "llm_explanation": explanation_result,
     }
 
 
@@ -62,7 +74,53 @@ def run_pipeline(url: str) -> dict:
 def health():
     return jsonify({"status": "ok"}), 200
 
+@app.route("/explain", methods=["POST"])
+def explain():
+    """
+    Apeleaza LLM pentru a genera explicatia verdictului
 
+    Body JSON:
+    {
+        "headline": str,
+        "verdict": {
+            "verdict": str,
+            "confidence": float,
+            "flags": [str]
+        },
+        "language": "ro" | "en"
+    }
+    """
+
+    body = request.get_json(silent=True)
+
+    if not body:
+        return jsonify({"error": "Missing request body."}), 400
+
+    headline = body.get("headline", "").strip()
+    verdict_result = body.get("verdict", {})
+    language = body.get("language", "en")
+
+    if not headline:
+        return jsonify({"error": "Missing 'headline'."}), 400
+
+    if not verdict_result:
+        return jsonify({"error": "Missing 'verdict' object."}), 400
+
+    try:
+        explanation = generate_explanation(
+            headline=headline,
+            verdict_result=verdict_result,
+            language=language
+        )
+
+        return jsonify(explanation), 200
+
+    except Exception as exc:
+        return jsonify({
+            "status": "error",
+            "message": str(exc)
+        }), 500
+    
 @app.route("/analyze", methods=["POST"])
 def analyze():
     """
@@ -84,6 +142,13 @@ def analyze():
                 "confidence": float,
                 "signals": { ... },
                 "flags": [ str ]
+            },
+            "llm_explanation": {
+                "verdict": str,
+                "confidence": float,
+                "emoji": str,
+                "explanation": str,
+                "status": "ok" | "fallback" | "missing_input"
             }
         }
     """
