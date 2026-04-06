@@ -1,11 +1,13 @@
 import React, { useEffect, useRef, useState } from "react";
 import "./App.css";
+import logo from "./assets/logo.png";
 
 function App() {
   const [messages, setMessages] = useState([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showBows, setShowBows] = useState(false);
+  const [wantSummary, setWantSummary] = useState(false);
   const chatEndRef = useRef(null);
 
   useEffect(() => {
@@ -43,20 +45,20 @@ function App() {
         ? `${(data.verdict.confidence * 100).toFixed(1)}%`
         : "N/A";
 
-    const similarity =
-      data?.semantic_similarity?.score ??
-      data?.semantic_similarity?.similarity ??
-      "N/A";
+    const similarityRaw = data?.semantic_similarity?.similarity_score;
+    const similarity = typeof similarityRaw === "number"
+      ? similarityRaw.toFixed(4)
+      : "N/A";
 
     const entailment =
       data?.entailment?.label ??
       data?.entailment?.prediction ??
       "N/A";
 
-    const clickbait =
-      data?.clickbait?.score ??
-      data?.clickbait?.clickbait_score ??
-      "N/A";
+    const clickbaitRaw = data?.clickbait?.final_score;
+    const clickbait = typeof clickbaitRaw === "number"
+      ? clickbaitRaw.toFixed(4)
+      : "N/A";
 
     const flags = Array.isArray(data?.verdict?.flags) ? data.verdict.flags : [];
 
@@ -111,21 +113,36 @@ function App() {
     try {
       const response = await fetch("http://localhost:5000/analyze", {
         method: "POST",
-        headers: {
-          "Content-Type": "application/json"
-        },
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ url: trimmedInput })
       });
 
       const data = await response.json();
 
       if (!response.ok) {
-        addMessage(
-          "bot",
-          data?.error || data?.message || "A aparut o eroare la analiza."
-        );
+        addMessage("bot", data?.error || data?.message || "A aparut o eroare la analiza.");
       } else {
         addMessage("bot", formatBotReply(data));
+
+        if (wantSummary) {
+          const articleText = data?.scraping?.cleaned?.text || "";
+          const headline = data?.scraping?.cleaned?.title || "";
+          const language = data?.language || "en";
+
+          try {
+            const explainResp = await fetch("http://localhost:5000/explain", {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({ headline, article_text: articleText, language })
+            });
+            const explainData = await explainResp.json();
+            if (explainData?.summary) {
+              addMessage("bot", `📝 Rezumat:\n${explainData.summary}`);
+            }
+          } catch {
+            addMessage("bot", "Nu am putut genera rezumatul.");
+          }
+        }
       }
     } catch (error) {
       addMessage(
@@ -147,9 +164,13 @@ function App() {
     <div className="app">
       {showBows && <BowAnimation />}
 
+      {loading && <LoadingAnimation />}
+
       <div className="chat-card">
         <header className="chat-header">
-          <div className="logo-placeholder">GP</div>
+          <div className="logo-wrapper">
+            <img src={logo} alt="Gossip Police" className="logo" />
+          </div>
 
           <div className="header-text">
             <h1>Gossip Police</h1>
@@ -191,20 +212,63 @@ function App() {
         </main>
 
         <footer className="chat-input-area">
-          <input
-            type="text"
-            placeholder="Lipeste aici linkul articolului..."
-            value={input}
-            onChange={(e) => setInput(e.target.value)}
-            onKeyDown={handleKeyDown}
-            disabled={loading}
-          />
+          <label className="summary-toggle">
+            <input
+              type="checkbox"
+              checked={wantSummary}
+              onChange={(e) => setWantSummary(e.target.checked)}
+              disabled={loading}
+            />
+            Vreau rezumat
+          </label>
 
-          <button onClick={handleSend} disabled={loading || !input.trim()}>
-            {loading ? "Se analizeaza..." : "Trimite"}
-          </button>
+          <div className="input-row">
+            <input
+              type="text"
+              placeholder="Lipeste aici linkul articolului..."
+              value={input}
+              onChange={(e) => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              disabled={loading}
+            />
+
+            <button onClick={handleSend} disabled={loading || !input.trim()}>
+              {loading ? "Se analizeaza..." : "Trimite"}
+            </button>
+          </div>
         </footer>
       </div>
+    </div>
+  );
+}
+
+function LoadingAnimation() {
+  const symbols = ["🎀", "🔍", "🪪"];
+  const items = Array.from({ length: 21 }, (_, i) => {
+    const tx = (Math.random() - 0.5) * 160;
+    const ty = (Math.random() - 0.5) * 160;
+    const rot = Math.random() * 720 - 360;
+    return { symbol: symbols[i % 3], tx, ty, rot };
+  });
+
+  return (
+    <div className="loading-overlay">
+      {items.map((item, i) => (
+        <div
+          key={i}
+          className="loading-particle"
+          style={{
+            "--tx": `${item.tx}vw`,
+            "--ty": `${item.ty}vh`,
+            "--rot": `${item.rot}deg`,
+            animationDelay: `${(i / 21) * 1.8}s`,
+            animationDuration: `${1.6 + Math.random() * 0.6}s`,
+            fontSize: `${22 + Math.random() * 18}px`,
+          }}
+        >
+          {item.symbol}
+        </div>
+      ))}
     </div>
   );
 }
