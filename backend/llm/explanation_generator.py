@@ -1,24 +1,32 @@
 import os
 from typing import Dict
 
-import google.generativeai as genai
+from groq import Groq
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL_NAME = "gemini-1.5-flash"
+MODEL_NAME = "llama-3.3-70b-versatile"
 
-SYSTEM_PROMPT = """You are "The Gossip Police" - a witty, sharp-tongued media detective who exposes misleading and clickbait headlines with humor and flair.
+SYSTEM_PROMPT = """You are "The Gossip Police" — a street-smart, wisecracking media detective straight outta the newsroom. You talk like a classic noir detective but keep it fun and informal. Never refuse a case. Always deliver the goods.
 
-Your job is to deliver a short verdict explanation (3-5 sentences) about whether a news headline is trustworthy, clickbait, or outright misleading.
+Your job: in 3-4 sentences, spill the tea on WHY the NLP system flagged this headline. Use the confidence score and signals as your evidence. Don't retell the story — crack the case on the headline itself. Use detective slang and informal expressions in the language you are writing in.
 
-Tone rules:
-- Be entertaining and slightly sarcastic, but never mean-spirited.
-- Use detective/investigative metaphors when they fit naturally.
-- Always end with a punchy one-liner conclusion.
-- Write in the same language as the article (Romanian or English).
-- Never use markdown, bullet points, or headers - plain prose only.
-- Keep it under 100 words."""
+Keep it loose, informal, fun. End with one killer closing line. Write only in the language specified. No bullet points, no markdown. Max 100 words."""
+
+
+def _call_llm(api_key: str, user_prompt: str, max_tokens: int = 400) -> str:
+    client = Groq(api_key=api_key)
+    response = client.chat.completions.create(
+        model=MODEL_NAME,
+        messages=[
+            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "user", "content": user_prompt},
+        ],
+        max_tokens=max_tokens,
+        temperature=0.9,
+    )
+    return (response.choices[0].message.content or "").strip()
 
 
 def _build_user_prompt(
@@ -33,19 +41,25 @@ def _build_user_prompt(
 
     if language == "ro":
         return (
-            f'Titlu analizat: "{headline}"\n'
-            f"Verdict: {verdict}\n"
-            f"Scor de incredere: {confidence_pct}%\n"
-            f"Probleme detectate: {flags_text}\n\n"
-            f"Scrie explicatia in romana."
+            f'Titlu: "{headline}"\n'
+            f"Verdict NLP: {verdict} (incredere {confidence_pct}%)\n"
+            f"Semnale detectate: {flags_text}\n\n"
+            f"Explica DE CE sistemul NLP a dat acest verdict acestui titlu. Nu rezuma articolul. "
+            f"Vorbeste despre titlu si semnalele de mai sus. "
+            f"Raspunde DOAR in romana, informal si amuzant, cu argou de detectiv romanesc — "
+            f'expresii ca "nasul meu nu minte", "am mirosit-o de la distanta", "clasica manevra", '
+            f'"cifrele vorbesc de la sine", "am mai vazut filmul asta". Incheie cu o concluzie scurta si acida.'
         )
 
     return (
-        f'Analyzed headline: "{headline}"\n'
-        f"Verdict: {verdict}\n"
-        f"Confidence score: {confidence_pct}%\n"
-        f"Issues detected: {flags_text}\n\n"
-        f"Write the explanation in English."
+        f'Headline: "{headline}"\n'
+        f"NLP verdict: {verdict} (confidence {confidence_pct}%)\n"
+        f"Signals detected: {flags_text}\n\n"
+        f"Explain WHY the NLP system gave this verdict to this headline. Do NOT summarize the article. "
+        f"Talk about the headline and the signals above. "
+        f"Reply in ENGLISH ONLY, informal and fun, with noir detective slang — "
+        f'phrases like "my nose started twitchin\'", "the numbers don\'t lie", "classic rookie move", '
+        f'"smells fishy from a mile away", "we\'ve seen this trick before". End with a punchy one-liner.'
     )
 
 
@@ -130,7 +144,7 @@ def generate_explanation(
             "status": "missing_input",
         }
 
-    api_key = os.getenv("GEMINI_API_KEY")
+    api_key = os.getenv("GROQ_API_KEY")
     if not api_key:
         fallback = _fallback_explanation(verdict, confidence, language)
         return {
@@ -144,23 +158,7 @@ def generate_explanation(
     user_prompt = _build_user_prompt(headline, verdict, confidence, flags, language)
 
     try:
-        genai.configure(api_key=api_key)
-
-        model = genai.GenerativeModel(
-            model_name=MODEL_NAME,
-            system_instruction=SYSTEM_PROMPT,
-        )
-
-        response = model.generate_content(
-            user_prompt,
-            generation_config=genai.types.GenerationConfig(
-                max_output_tokens=400,
-                temperature=0.7,
-            ),
-        )
-
-        explanation = getattr(response, "text", "") or ""
-        explanation = explanation.strip()
+        explanation = _call_llm(api_key, user_prompt, max_tokens=400)
 
         if not explanation:
             explanation = _fallback_explanation(verdict, confidence, language)
@@ -184,5 +182,55 @@ def generate_explanation(
             "confidence": confidence,
             "emoji": emoji,
             "explanation": fallback,
+            "status": "fallback",
+        }
+
+
+def summarize_article(article_text: str, headline: str = "", language: str = "en") -> dict:
+    if not article_text:
+        return {
+            "summary": (
+                "Nu am gasit continut de rezumat." if language == "ro"
+                else "No article content to summarize."
+            ),
+            "status": "missing_input",
+        }
+
+    api_key = os.getenv("GROQ_API_KEY")
+    if not api_key:
+        return {
+            "summary": (
+                "Rezumatul nu este disponibil." if language == "ro"
+                else "Summary unavailable."
+            ),
+            "status": "missing_api_key",
+        }
+
+    if language == "ro":
+        user_prompt = (
+            f'Titlu: "{headline}"\n\nArticol:\n{article_text[:4000]}\n\n'
+            f"Rezuma acest articol in romana."
+        )
+    else:
+        user_prompt = (
+            f'Headline: "{headline}"\n\nArticle:\n{article_text[:4000]}\n\n'
+            f"Summarize this article in English."
+        )
+
+    try:
+        summary = _call_llm(api_key, user_prompt, max_tokens=300)
+        if not summary:
+            return {"summary": "No summary generated.", "status": "fallback"}
+        return {"summary": summary, "status": "ok"}
+
+    except Exception as exc:
+        import traceback
+        print(f"[explanation_generator] Gemini summarize error: {exc}")
+        traceback.print_exc()
+        return {
+            "summary": (
+                "Rezumatul nu este disponibil." if language == "ro"
+                else "Summary unavailable."
+            ),
             "status": "fallback",
         }

@@ -1,4 +1,9 @@
 import json
+import sys
+import os
+
+sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
+
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -7,7 +12,7 @@ from nlp.semantic_similarity import compute_similarity
 from nlp.entailment import compute_entailment
 from nlp.clickbait import compute_clickbait
 from decision.verdict import compute_verdict
-from llm.explanation_generator import generate_explanation
+from llm.explanation_generator import generate_explanation, summarize_article
 
 app = Flask(__name__)
 CORS(app)  # => we can use React bc of this
@@ -77,16 +82,19 @@ def health():
 @app.route("/explain", methods=["POST"])
 def explain():
     """
-    Apeleaza LLM pentru a genera explicatia verdictului
+    Apeleaza LLM (Gemini) pentru a genera explicatia verdictului SAU rezumatul articolului.
 
-    Body JSON:
+    Mod 1 - verdict explanation:
     {
         "headline": str,
-        "verdict": {
-            "verdict": str,
-            "confidence": float,
-            "flags": [str]
-        },
+        "verdict": { "verdict": str, "confidence": float, "flags": [str] },
+        "language": "ro" | "en"
+    }
+
+    Mod 2 - article summary (when article_text is provided):
+    {
+        "headline": str,
+        "article_text": str,
         "language": "ro" | "en"
     }
     """
@@ -97,8 +105,21 @@ def explain():
         return jsonify({"error": "Missing request body."}), 400
 
     headline = body.get("headline", "").strip()
-    verdict_result = body.get("verdict", {})
     language = body.get("language", "en")
+    article_text = body.get("article_text", "").strip()
+
+    if article_text:
+        try:
+            result = summarize_article(
+                article_text=article_text,
+                headline=headline,
+                language=language,
+            )
+            return jsonify(result), 200
+        except Exception as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 500
+
+    verdict_result = body.get("verdict", {})
 
     if not headline:
         return jsonify({"error": "Missing 'headline'."}), 400
@@ -110,16 +131,12 @@ def explain():
         explanation = generate_explanation(
             headline=headline,
             verdict_result=verdict_result,
-            language=language
+            language=language,
         )
-
         return jsonify(explanation), 200
 
     except Exception as exc:
-        return jsonify({
-            "status": "error",
-            "message": str(exc)
-        }), 500
+        return jsonify({"status": "error", "message": str(exc)}), 500
     
 @app.route("/analyze", methods=["POST"])
 def analyze():
