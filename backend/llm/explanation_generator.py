@@ -6,7 +6,7 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL_NAME = "gemini-2.0-flash-lite"
+MODEL_NAME = "gemini-3.1-flash-lite-preview"
 GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 SYSTEM_PROMPT = """You are "The Gossip Police" — a street-smart, wisecracking media detective straight outta the newsroom. You talk like a classic noir detective but keep it fun and informal. Never refuse a case. Always deliver the goods.
