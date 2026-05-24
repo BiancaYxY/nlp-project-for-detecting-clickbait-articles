@@ -100,7 +100,7 @@ def explain():
     language = body.get("language", "en")
     article_text = body.get("article_text", "").strip()
 
-    if article_text:
+    if "article_text" in body:
         try:
             result = summarize_article(
                 article_text=article_text,

@@ -257,7 +257,8 @@ function App() {
           });
           const explainData = await explainResp.json();
           summary = explainData?.summary || null;
-        } catch {
+        } catch (err) {
+          console.error("Summary fetch failed:", err);
           summary = null;
         }
       }

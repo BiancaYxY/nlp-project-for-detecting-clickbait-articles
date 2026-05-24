@@ -211,17 +211,17 @@ def summarize_article(article_text: str, headline: str = "", language: str = "en
 
     if language == "ro":
         user_prompt = (
-            f'Titlu: "{headline}"\n\nArticol:\n{article_text[:4000]}\n\n'
+            f'Titlu: "{headline}"\n\nArticol:\n{article_text}\n\n'
             f"Rezuma acest articol in romana, in 3-5 propozitii clare si factuale."
         )
     else:
         user_prompt = (
-            f'Headline: "{headline}"\n\nArticle:\n{article_text[:4000]}\n\n'
+            f'Headline: "{headline}"\n\nArticle:\n{article_text}\n\n'
             f"Summarize this article in English in 3-5 clear, factual sentences."
         )
 
     try:
-        summary = _call_llm(api_key, user_prompt, max_tokens=300, system_prompt=SUMMARY_SYSTEM_PROMPT)
+        summary = _call_llm(api_key, user_prompt, max_tokens=1024, system_prompt=SUMMARY_SYSTEM_PROMPT)
         if not summary:
             return {
                 "summary": (
