@@ -1,10 +1,8 @@
-import json
 import sys
 import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
-import traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -13,7 +11,7 @@ from nlp.semantic_similarity import compute_similarity
 from nlp.entailment import compute_entailment
 from nlp.clickbait import compute_clickbait
 from decision.verdict import compute_verdict
-from llm.explanation_generator import generate_explanation, summarize_article
+from llm.explanation_generator import generate_explanation
 
 app = Flask(__name__)
 CORS(app)  # => we can use React bc of this
@@ -79,90 +77,8 @@ def run_pipeline(url: str) -> dict:
 def health():
     return jsonify({"status": "ok"}), 200
 
-@app.route("/explain", methods=["POST"])
-def explain():
-    """
-    Apeleaza LLM (Gemini) pentru a genera explicatia verdictului.
-
-    Body JSON asteptat:
-    {
-        "headline": str,
-        "verdict": { "verdict": str, "confidence": float, "flags": [str] },
-        "language": "ro" | "en"
-    }
-    """
-
-    body = request.get_json(silent=True)
-
-    if not body:
-        return jsonify({"error": "Missing request body."}), 400
-
-    headline = body.get("headline", "").strip()
-    language = body.get("language", "en")
-    article_text = body.get("article_text", "").strip()
-
-    if "article_text" in body:
-        try:
-            result = summarize_article(
-                article_text=article_text,
-                headline=headline,
-                language=language,
-            )
-            return jsonify(result), 200
-        except Exception as exc:
-            traceback.print_exc()
-            return jsonify({"status": "error", "message": str(exc)}), 500
-
-    verdict_result = body.get("verdict", {})
-
-    if not headline:
-        return jsonify({"error": "Missing 'headline'."}), 400
-
-    if not verdict_result:
-        return jsonify({"error": "Missing 'verdict' object."}), 400
-
-    try:
-        explanation = generate_explanation(
-            headline=headline,
-            verdict_result=verdict_result,
-            language=language,
-        )
-        return jsonify(explanation), 200
-
-    except Exception as exc:
-        return jsonify({"status": "error", "message": str(exc)}), 500
-    
 @app.route("/analyze", methods=["POST"])
 def analyze():
-    """
-    Primeste un URL si returneaza rezultatul complet al pipeline-ului
-
-    Body JSON asteptat:
-        { "url": "https://example.com/article" }
-
-    Raspuns:
-        {
-            "url": str,
-            "language": "ro" | "en",
-            "scraping": { ... },
-            "semantic_similarity": { ... },
-            "entailment": { ... },
-            "clickbait": { ... },
-            "verdict": {
-                "verdict": "reliable" | "misleading" | "clickbait" | "unverifiable",
-                "confidence": float,
-                "signals": { ... },
-                "flags": [ str ]
-            },
-            "llm_explanation": {
-                "verdict": str,
-                "confidence": float,
-                "emoji": str,
-                "explanation": str,
-                "status": "ok" | "fallback" | "missing_input"
-            }
-        }
-    """
     body = request.get_json(silent=True)
 
     if not body or not body.get("url"):

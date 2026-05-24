@@ -9,7 +9,7 @@ const VERDICT_CONFIG = {
   unverifiable: { emoji: "🔍", label: "Unverifiable", className: "verdict-unverifiable" },
 };
 
-function ResultCard({ data, summary }) {
+function ResultCard({ data }) {
   const title =
     data?.scraping?.cleaned?.title ||
     data?.scraping?.raw?.title ||
@@ -100,13 +100,6 @@ function ResultCard({ data, summary }) {
             <p className="explanation-text">{llmExplanation}</p>
           </div>
         )}
-
-        {summary && (
-          <div className="summary-box">
-            <span className="result-section-label">Article Summary</span>
-            <p className="summary-text">{summary}</p>
-          </div>
-        )}
       </div>
     </div>
   );
@@ -165,7 +158,6 @@ function App() {
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [showBows, setShowBows] = useState(false);
-  const [wantSummary, setWantSummary] = useState(false);
   const chatEndRef = useRef(null);
   const msgId = useRef(0);
 
@@ -189,12 +181,9 @@ function App() {
     setMessages((prev) => [...prev, { id, sender, type: "text", text }]);
   };
 
-  const addResultMessage = (data, summary = null) => {
+  const addResultMessage = (data) => {
     const id = ++msgId.current;
-    setMessages((prev) => [
-      ...prev,
-      { id, sender: "bot", type: "result", data, summary },
-    ]);
+    setMessages((prev) => [...prev, { id, sender: "bot", type: "result", data }]);
   };
 
   const isValidUrl = (value) => /^https?:\/\/.+/i.test(value.trim());
@@ -242,28 +231,7 @@ function App() {
         return;
       }
 
-      let summary = null;
-
-      if (wantSummary) {
-        const articleText = data?.scraping?.cleaned?.text || "";
-        const headline = data?.scraping?.cleaned?.title || "";
-        const language = data?.language || "en";
-
-        try {
-          const explainResp = await fetch("http://localhost:8080/explain", {
-            method: "POST",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ headline, article_text: articleText, language }),
-          });
-          const explainData = await explainResp.json();
-          summary = explainData?.summary || null;
-        } catch (err) {
-          console.error("Summary fetch failed:", err);
-          summary = null;
-        }
-      }
-
-      addResultMessage(data, summary);
+      addResultMessage(data);
     } catch {
       addTextMessage(
         "bot",
@@ -300,7 +268,7 @@ function App() {
             message.type === "result" ? (
               <div key={message.id} className="message-row bot-row">
                 <div className="result-card-wrap">
-                  <ResultCard data={message.data} summary={message.summary} />
+                  <ResultCard data={message.data} />
                 </div>
               </div>
             ) : (
@@ -328,18 +296,6 @@ function App() {
         </main>
 
         <footer className="chat-input-area">
-          <div className="input-options">
-            <label className="summary-toggle">
-              <input
-                type="checkbox"
-                checked={wantSummary}
-                onChange={(e) => setWantSummary(e.target.checked)}
-                disabled={loading}
-              />
-              Vreau rezumat
-            </label>
-          </div>
-
           <div className="input-row">
             <input
               type="text"
