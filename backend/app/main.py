@@ -12,11 +12,10 @@ from nlp.semantic_similarity import compute_similarity
 from nlp.entailment import compute_entailment
 from nlp.clickbait import compute_clickbait
 from decision.verdict import compute_verdict
-from llm.explanation_generator import generate_explanation, summarize_article
+from llm.explanation_generator import generate_explanation
 
 app = Flask(__name__)
 CORS(app)  # => we can use React bc of this
-
 
 # === some kind of helpers ===
 def detect_language_from_text(title: str, text: str) -> str:
@@ -82,19 +81,12 @@ def health():
 @app.route("/explain", methods=["POST"])
 def explain():
     """
-    Apeleaza LLM (Gemini) pentru a genera explicatia verdictului SAU rezumatul articolului.
+    Apeleaza LLM (Gemini) pentru a genera explicatia verdictului.
 
-    Mod 1 - verdict explanation:
+    Body JSON asteptat:
     {
         "headline": str,
         "verdict": { "verdict": str, "confidence": float, "flags": [str] },
-        "language": "ro" | "en"
-    }
-
-    Mod 2 - article summary (when article_text is provided):
-    {
-        "headline": str,
-        "article_text": str,
         "language": "ro" | "en"
     }
     """
@@ -106,19 +98,6 @@ def explain():
 
     headline = body.get("headline", "").strip()
     language = body.get("language", "en")
-    article_text = body.get("article_text", "").strip()
-
-    if article_text:
-        try:
-            result = summarize_article(
-                article_text=article_text,
-                headline=headline,
-                language=language,
-            )
-            return jsonify(result), 200
-        except Exception as exc:
-            return jsonify({"status": "error", "message": str(exc)}), 500
-
     verdict_result = body.get("verdict", {})
 
     if not headline:
