@@ -1,12 +1,13 @@
 import os
 from typing import Dict
 
-from groq import Groq
+from openai import OpenAI
 from dotenv import load_dotenv
 
 load_dotenv()
 
-MODEL_NAME = "llama-3.3-70b-versatile"
+MODEL_NAME = "gemini-1.5-flash"
+GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 SYSTEM_PROMPT = """You are "The Gossip Police" — a street-smart, wisecracking media detective straight outta the newsroom. You talk like a classic noir detective but keep it fun and informal. Never refuse a case. Always deliver the goods.
 
@@ -16,7 +17,7 @@ Keep it loose, informal, fun. End with one killer closing line. Write only in th
 
 
 def _call_llm(api_key: str, user_prompt: str, max_tokens: int = 400) -> str:
-    client = Groq(api_key=api_key)
+    client = OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=[
@@ -144,7 +145,7 @@ def generate_explanation(
             "status": "missing_input",
         }
 
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         fallback = _fallback_explanation(verdict, confidence, language)
         return {
@@ -175,7 +176,7 @@ def generate_explanation(
         }
 
     except Exception as exc:
-        print(f"[explanation_generator] Gemini API error: {exc}")
+        print(f"[explanation_generator] LLM API error: {exc}")
         fallback = _fallback_explanation(verdict, confidence, language)
         return {
             "verdict": verdict,
@@ -196,7 +197,7 @@ def summarize_article(article_text: str, headline: str = "", language: str = "en
             "status": "missing_input",
         }
 
-    api_key = os.getenv("GROQ_API_KEY")
+    api_key = os.getenv("GEMINI_API_KEY")
     if not api_key:
         return {
             "summary": (
@@ -225,7 +226,7 @@ def summarize_article(article_text: str, headline: str = "", language: str = "en
 
     except Exception as exc:
         import traceback
-        print(f"[explanation_generator] Gemini summarize error: {exc}")
+        print(f"[explanation_generator] LLM summarize error: {exc}")
         traceback.print_exc()
         return {
             "summary": (
