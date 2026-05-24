@@ -4,6 +4,7 @@ import os
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(__file__)))
 
+import traceback
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 
@@ -109,6 +110,7 @@ def explain():
             )
             return jsonify(result), 200
         except Exception as exc:
+            traceback.print_exc()
             return jsonify({"status": "error", "message": str(exc)}), 500
 
     verdict_result = body.get("verdict", {})
