@@ -15,13 +15,15 @@ Your job: in 3-4 sentences, spill the tea on WHY the NLP system flagged this hea
 
 Keep it loose, informal, fun. End with one killer closing line. Write only in the language specified. No bullet points, no markdown. Max 100 words."""
 
+SUMMARY_SYSTEM_PROMPT = """You are a neutral, concise news summarizer. Your only job is to summarize the given article clearly and factually in 3-5 sentences. Do not editorialize, do not add opinions, do not use dramatic language. Write only in the language specified by the user. No bullet points, no markdown, no headers."""
 
-def _call_llm(api_key: str, user_prompt: str, max_tokens: int = 400) -> str:
+
+def _call_llm(api_key: str, user_prompt: str, max_tokens: int = 400, system_prompt: str = SYSTEM_PROMPT) -> str:
     client = OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
     response = client.chat.completions.create(
         model=MODEL_NAME,
         messages=[
-            {"role": "system", "content": SYSTEM_PROMPT},
+            {"role": "system", "content": system_prompt},
             {"role": "user", "content": user_prompt},
         ],
         max_tokens=max_tokens,
@@ -183,5 +185,59 @@ def generate_explanation(
             "confidence": confidence,
             "emoji": emoji,
             "explanation": fallback,
+            "status": "fallback",
+        }
+
+
+def summarize_article(article_text: str, headline: str = "", language: str = "en") -> dict:
+    if not article_text:
+        return {
+            "summary": (
+                "Nu am gasit continut de rezumat." if language == "ro"
+                else "No article content to summarize."
+            ),
+            "status": "missing_input",
+        }
+
+    api_key = os.getenv("GEMINI_API_KEY")
+    if not api_key:
+        return {
+            "summary": (
+                "Rezumatul nu este disponibil." if language == "ro"
+                else "Summary unavailable."
+            ),
+            "status": "missing_api_key",
+        }
+
+    if language == "ro":
+        user_prompt = (
+            f'Titlu: "{headline}"\n\nArticol:\n{article_text[:4000]}\n\n'
+            f"Rezuma acest articol in romana, in 3-5 propozitii clare si factuale."
+        )
+    else:
+        user_prompt = (
+            f'Headline: "{headline}"\n\nArticle:\n{article_text[:4000]}\n\n'
+            f"Summarize this article in English in 3-5 clear, factual sentences."
+        )
+
+    try:
+        summary = _call_llm(api_key, user_prompt, max_tokens=300, system_prompt=SUMMARY_SYSTEM_PROMPT)
+        if not summary:
+            return {
+                "summary": (
+                    "Rezumatul nu a putut fi generat." if language == "ro"
+                    else "No summary generated."
+                ),
+                "status": "fallback",
+            }
+        return {"summary": summary, "status": "ok"}
+
+    except Exception as exc:
+        print(f"[explanation_generator] LLM summarize error: {exc}")
+        return {
+            "summary": (
+                "Rezumatul nu este disponibil." if language == "ro"
+                else "Summary unavailable."
+            ),
             "status": "fallback",
         }

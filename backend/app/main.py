@@ -12,7 +12,7 @@ from nlp.semantic_similarity import compute_similarity
 from nlp.entailment import compute_entailment
 from nlp.clickbait import compute_clickbait
 from decision.verdict import compute_verdict
-from llm.explanation_generator import generate_explanation
+from llm.explanation_generator import generate_explanation, summarize_article
 
 app = Flask(__name__)
 CORS(app)  # => we can use React bc of this
@@ -98,6 +98,19 @@ def explain():
 
     headline = body.get("headline", "").strip()
     language = body.get("language", "en")
+    article_text = body.get("article_text", "").strip()
+
+    if article_text:
+        try:
+            result = summarize_article(
+                article_text=article_text,
+                headline=headline,
+                language=language,
+            )
+            return jsonify(result), 200
+        except Exception as exc:
+            return jsonify({"status": "error", "message": str(exc)}), 500
+
     verdict_result = body.get("verdict", {})
 
     if not headline:
