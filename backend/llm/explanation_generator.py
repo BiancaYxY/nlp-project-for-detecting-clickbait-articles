@@ -1,13 +1,13 @@
 import os
 from typing import Dict
 
-from openai import OpenAI
+from google import genai
+from google.genai import types
 from dotenv import load_dotenv
 
 load_dotenv()
 
 MODEL_NAME = "gemini-3.1-flash-lite-preview"
-GEMINI_BASE_URL = "https://generativelanguage.googleapis.com/v1beta/openai/"
 
 SYSTEM_PROMPT = """You are "The Gossip Police" — a street-smart, wisecracking media detective straight outta the newsroom. You talk like a classic noir detective but keep it fun and informal. Never refuse a case. Always deliver the goods.
 
@@ -19,17 +19,17 @@ SUMMARY_SYSTEM_PROMPT = """You are a neutral, concise news summarizer. Your only
 
 
 def _call_llm(api_key: str, user_prompt: str, max_tokens: int = 400, system_prompt: str = SYSTEM_PROMPT) -> str:
-    client = OpenAI(api_key=api_key, base_url=GEMINI_BASE_URL)
-    response = client.chat.completions.create(
+    client = genai.Client(api_key=api_key)
+    response = client.models.generate_content(
         model=MODEL_NAME,
-        messages=[
-            {"role": "system", "content": system_prompt},
-            {"role": "user", "content": user_prompt},
-        ],
-        max_tokens=max_tokens,
-        temperature=0.9,
+        contents=user_prompt,
+        config=types.GenerateContentConfig(
+            system_instruction=system_prompt,
+            max_output_tokens=max_tokens,
+            temperature=0.9,
+        ),
     )
-    return (response.choices[0].message.content or "").strip()
+    return (response.text or "").strip()
 
 
 def _build_user_prompt(
